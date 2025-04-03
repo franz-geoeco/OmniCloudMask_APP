@@ -16,19 +16,25 @@ OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments cloud
 **Paper**: [Training sensor-agnostic deep learning models for remote sensing: Achieving state-of-the-art cloud and cloud shadow identification with OmniCloudMask](https://www.sciencedirect.com/science/article/pii/S0034425725000987)
 
 ## Installation
-
 1. Clone this repository:
+```bash
+conda create -n omnicloudmask python=3.9
+
+conda activate omnicloudmask
+```
+
+2. Clone this repository:
 ```bash
 git clone https://github.com/yourusername/cloud-masking-app.git
 cd cloud-masking-app
 ```
 
-2. Install the required packages:
+3. Install the required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Install OmniCloudMask:
+4. Install OmniCloudMask:
 ```bash
 pip install omnicloudmask
 ```
@@ -37,7 +43,7 @@ pip install omnicloudmask
 
 Start the Streamlit app:
 ```bash
-streamlit run app.py
+streamlit run app.py --server.maxUploadSize 1000
 ```
 
 The app will open in your default web browser, typically at http://localhost:8501.
@@ -180,7 +186,7 @@ volume = {322},
 pages = {114694},
 year = {2025},
 issn = {0034-4257},
-doi = {https://doi.org/10.1016/j.rse.2025.114694}, 
+doi = {https://doi.org/10.1016/j.rse.2025.114694},  
 url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
 author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
 keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
