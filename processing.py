@@ -10,26 +10,6 @@ import streamlit as st
 from omnicloudmask import predict_from_array
 from visualization import plot_results
 
-"""
-OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments clouds and cloud shadows.
-
-GitHub: https://github.com/DPIRD-DMA/OmniCloudMask
-Paper: https://www.sciencedirect.com/science/article/pii/S0034425725000987
-
-Citation:
-@article{WRIGHT2025114694,
-title = {Training sensor-agnostic deep learning models for remote sensing: Achieving state-of-the-art cloud and cloud shadow identification with OmniCloudMask},
-journal = {Remote Sensing of Environment},
-volume = {322},
-pages = {114694},
-year = {2025},
-issn = {0034-4257},
-doi = {https://doi.org/10.1016/j.rse.2025.114694},  [Titel anhand dieser DOI in Citavi-Projekt übernehmen]  
-url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
-author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George}
-}
-"""
-
 def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor=2, device="cuda", detection_options=None):
     """
     Process a multiband file for cloud masking
@@ -146,27 +126,33 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                 if detection_options is None:
                     detection_options = {}
                 
+                # Extract application-specific options before passing to predict_from_array
+                save_cloud_mask = detection_options.pop("save_cloud_mask", True) if detection_options else True
+                
+                # Create a copy of detection options to avoid modifying the original
+                predict_options = detection_options.copy() if detection_options else {}
+                
                 # Handle inference_dtype conversion from string to torch.dtype
-                if "inference_dtype" in detection_options and isinstance(detection_options["inference_dtype"], str):
-                    dtype_str = detection_options["inference_dtype"]
+                if "inference_dtype" in predict_options and isinstance(predict_options["inference_dtype"], str):
+                    dtype_str = predict_options["inference_dtype"]
                     if dtype_str == "float32":
-                        detection_options["inference_dtype"] = torch.float32
+                        predict_options["inference_dtype"] = torch.float32
                     elif dtype_str == "float16":
-                        detection_options["inference_dtype"] = torch.float16
+                        predict_options["inference_dtype"] = torch.float16
                     elif dtype_str == "bfloat16":
                         if hasattr(torch, "bfloat16"):
-                            detection_options["inference_dtype"] = torch.bfloat16
+                            predict_options["inference_dtype"] = torch.bfloat16
                         else:
                             st.warning("bfloat16 not supported in your PyTorch version, falling back to float16")
-                            detection_options["inference_dtype"] = torch.float16
+                            predict_options["inference_dtype"] = torch.float16
                 
                 # Set inference device
-                detection_options["inference_device"] = device
+                predict_options["inference_device"] = device
                 
-                # Call predict_from_array with all options
+                # Call predict_from_array with valid options only
                 pred_mask_res = predict_from_array(
                     trimmed_stack,
-                    **detection_options
+                    **predict_options
                 )
                 
                 # Create a visualization
@@ -218,24 +204,27 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                 with rasterio.open(output_path, 'w', **output_metadata) as dst:
                     dst.write(masked_data)
                 
-                # Save cloud mask as separate file
-                mask_filename = os.path.splitext(output_filename)[0] + '_CLOUDMASK.tif'
-                mask_path = os.path.join(output_dir, mask_filename)
-                
-                mask_metadata = src.meta.copy()
-                mask_metadata.update({
-                    'count': 1,
-                    'dtype': 'uint8',
-                    'nodata': 255
-                })
-                
-                binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
-                
-                with rasterio.open(mask_path, 'w', **mask_metadata) as dst:
-                    dst.write(binary_mask, 1)
-                
-                st.success(f"Processed file saved to: {output_path}")
-                st.success(f"Cloud mask saved to: {mask_path}")
+                # Save cloud mask as separate file if option is enabled
+                if save_cloud_mask:
+                    mask_filename = os.path.splitext(output_filename)[0] + '_CLOUDMASK.tif'
+                    mask_path = os.path.join(output_dir, mask_filename)
+                    
+                    mask_metadata = src.meta.copy()
+                    mask_metadata.update({
+                        'count': 1,
+                        'dtype': 'uint8',
+                        'nodata': 255
+                    })
+                    
+                    binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
+                    
+                    with rasterio.open(mask_path, 'w', **mask_metadata) as dst:
+                        dst.write(binary_mask, 1)
+                    
+                    st.success(f"Processed file saved to: {output_path}")
+                    st.success(f"Cloud mask saved to: {mask_path}")
+                else:
+                    st.success(f"Processed file saved to: {output_path}")
                 
                 return True
             else:
@@ -437,33 +426,36 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
                     with rasterio.open(output_path, 'w', **output_metadata) as dst:
                         dst.write(masked_band, 1)
             
-            # Save cloud mask as separate file
-            base_filename = os.path.basename(red_band_file)
-            pattern = r'(.*)_B\d+_(.*)\.tif'
-            match = re.search(pattern, base_filename, re.IGNORECASE)
-            
-            if match:
-                prefix, date_str = match.groups()
-                mask_filename = f"{prefix}_CLOUDMASK_{date_str}.tif"
-            else:
-                mask_filename = "cloudmask.tif"
+            # Save cloud mask as separate file if option is enabled
+            if detection_options.get("save_cloud_mask", True):
+                base_filename = os.path.basename(red_band_file)
+                pattern = r'(.*)_B\d+_(.*)\.tif'
+                match = re.search(pattern, base_filename, re.IGNORECASE)
                 
-            mask_path = os.path.join(output_dir, mask_filename)
-            
-            mask_metadata = metadata.copy()
-            mask_metadata.update({
-                'count': 1,
-                'dtype': 'uint8',
-                'nodata': 255
-            })
-            
-            binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
-            
-            with rasterio.open(mask_path, 'w', **mask_metadata) as dst:
-                dst.write(binary_mask, 1)
-            
-            st.success(f"Processed {len(files_dict)} files. Saved to: {output_dir}")
-            st.success(f"Cloud mask saved to: {mask_path}")
+                if match:
+                    prefix, date_str = match.groups()
+                    mask_filename = f"{prefix}_CLOUDMASK_{date_str}.tif"
+                else:
+                    mask_filename = "cloudmask.tif"
+                    
+                mask_path = os.path.join(output_dir, mask_filename)
+                
+                mask_metadata = metadata.copy()
+                mask_metadata.update({
+                    'count': 1,
+                    'dtype': 'uint8',
+                    'nodata': 255
+                })
+                
+                binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
+                
+                with rasterio.open(mask_path, 'w', **mask_metadata) as dst:
+                    dst.write(binary_mask, 1)
+                
+                st.success(f"Processed {len(files_dict)} files. Saved to: {output_dir}")
+                st.success(f"Cloud mask saved to: {mask_path}")
+            else:
+                st.success(f"Processed {len(files_dict)} files. Saved to: {output_dir}")
             
             return True
         else:

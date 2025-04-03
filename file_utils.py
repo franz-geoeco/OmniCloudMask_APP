@@ -6,21 +6,15 @@ from collections import defaultdict
 
 def find_raster_files(folder_path):
     """
-    Find all raster files in a folder
-    
-    Parameters:
-    folder_path (str): Path to the folder to search
-    
-    Returns:
-    list: List of paths to raster files
+    Find all raster files in a folder, ensuring no duplicates
     """
     extensions = ['.tif', '.tiff', '.TIF', '.TIFF']
-    files = []
+    files = set()  # Using a set to avoid duplicates
     
     for ext in extensions:
-        files.extend(glob.glob(os.path.join(folder_path, f'*{ext}')))
+        files.update(glob.glob(os.path.join(folder_path, f'*{ext}')))
     
-    return files
+    return list(files)
 
 
 def is_multiband_file(file_path):
@@ -33,21 +27,19 @@ def is_multiband_file(file_path):
     Returns:
     bool: True if the file has multiple bands, False otherwise
     """
-    with rasterio.open(file_path) as src:
-        return src.count > 1
+    try:
+        with rasterio.open(file_path) as src:
+            return src.count > 1
+    except Exception as e:
+        print(f"Warning: Could not read file {os.path.basename(file_path)}: {str(e)}")
+        return False
 
 
 def group_files_by_date_tile(files):
     """
     Group files by date and tile ID if they follow naming pattern
-    
-    Parameters:
-    files (list): List of file paths to group
-    
-    Returns:
-    dict: Dictionary with date as keys and lists of files as values
     """
-    grouped = defaultdict(list)
+    grouped = defaultdict(set)  # Use a set instead of a list
     
     # Try different patterns for grouping
     patterns = [
@@ -59,7 +51,13 @@ def group_files_by_date_tile(files):
         r'.*_(\d{8})_.*\.tif'
     ]
     
+    # Track which files have been successfully matched
+    matched_files = set()
+    
     for file in files:
+        if file in matched_files:
+            continue  # Skip already matched files
+            
         filename = os.path.basename(file)
         matched = False
         
@@ -70,26 +68,31 @@ def group_files_by_date_tile(files):
                 # Format YYYYMMDD to YYYY-MM-DD if needed
                 if len(date_str) == 8 and '-' not in date_str:
                     date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-                grouped[date_str].append(file)
+                
+                grouped[date_str].add(file)
+                matched_files.add(file)
                 matched = True
-                break
+                break  # Stop after first match
         
-        if not matched:
-            # If no date pattern found, try to group by other common identifiers
-            # Check for common band identifiers
+        if not matched and file not in matched_files:
+            # If no date pattern found, try to group by other identifiers
+            # but only if not already matched
             band_match = re.search(r'_B(\d+)_', filename, re.IGNORECASE)
             if band_match:
-                # Group by tile ID if possible
                 tile_match = re.search(r'_(\w+)_B\d+_', filename, re.IGNORECASE)
                 if tile_match:
                     tile_id = tile_match.group(1)
-                    grouped[f"tile_{tile_id}"].append(file)
+                    grouped[f"tile_{tile_id}"].add(file)
+                    matched_files.add(file)
                 else:
-                    grouped["unknown"].append(file)
+                    grouped["unknown"].add(file)
+                    matched_files.add(file)
             else:
-                grouped["unknown"].append(file)
+                grouped["unknown"].add(file)
+                matched_files.add(file)
     
-    return grouped
+    # Convert sets back to lists for compatibility
+    return {k: list(v) for k, v in grouped.items()}
 
 
 def get_band_info(file_path):

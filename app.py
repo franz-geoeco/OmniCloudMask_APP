@@ -16,6 +16,28 @@ def main():
     
     st.title("Satellite Image Cloud Masking Tool")
     
+    st.markdown("""
+This application helps you mask clouds in satellite imagery. It uses the OmniCloudMask deep learning model to accurately identify clouds and cloud shadows in your images.
+
+### How to use:
+
+1. **Choose a processing mode**:
+   - **Single File**: Upload a multiband GeoTIFF and specify which bands to use
+   - **Folder Processing**: Point to a folder with satellite imagery files
+
+2. **Configure options**:
+   - Set resampling factor for speed/accuracy balance (the resampled spat. res. should be >=10 m)
+   - Adjust advanced parameters if needed
+   - Specify output location
+
+3. **Start processing**:
+   - The app will detect clouds and cloud shadows
+   - It will replace cloud pixels with NoData values
+   - Results are saved to your specified output folder
+
+The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR bands at 10-50m resolution. For more information look into the paper or Github.
+    """)
+
     # Add information about OmniCloudMask
     with st.expander("About OmniCloudMask", expanded=True):
         st.markdown("""
@@ -48,13 +70,6 @@ def main():
         }
         ```
         """)
-    
-    st.markdown("""
-    This application helps you mask clouds in satellite imagery. 
-    You can process multiband GeoTIFFs or folders with multiple 
-    single-band images. The app identifies cloud pixels and sets 
-    them to NoData in the output images.
-    """)
     
     # Sidebar for inputs
     with st.sidebar:
@@ -114,6 +129,10 @@ def main():
                                        options=["google_drive", "hugging_face"],
                                        index=0,
                                        help="Source from which to download model weights")
+            
+            # Option to save cloud mask file
+            save_cloud_mask = st.checkbox("Save Cloud Mask File", value=False,
+                                        help="If checked, saves the cloud mask as a separate GeoTIFF file")
         
         # Create a dictionary of detection options to pass to processing functions
         detection_options = {
@@ -127,7 +146,8 @@ def main():
             "softmax_output": softmax_output,
             "no_data_value": no_data_value,
             "apply_no_data_mask": apply_no_data_mask,
-            "model_download_source": model_source
+            "model_download_source": model_source,
+            "save_cloud_mask": save_cloud_mask
         }
         
         if processing_mode == "Single File":
