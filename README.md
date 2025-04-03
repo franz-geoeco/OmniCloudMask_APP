@@ -34,11 +34,6 @@ cd cloud-masking-app
 pip install -r requirements.txt
 ```
 
-4. Install OmniCloudMask:
-```bash
-pip install omnicloudmask
-```
-
 ## Running the Application
 
 Start the Streamlit app:
