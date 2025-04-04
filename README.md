@@ -113,9 +113,9 @@ The application generates the following output files in the specified output dir
 - **Masked Bands**: Original band files with cloud pixels set to NoData
 - **Cloud Mask**: A binary GeoTIFF file with classes:
   - 0 = clear
-  - 1 = cloud
-  - 2 = cloud shadow (if supported by model)
-  - 255 = no data
+  - 1 = Thick Cloud
+  - 2 = Thin Cloud
+  - 3 = Cloud Shadow
 - **Visualization**: Optional PNG file showing the detection results
 
 ## Application Structure
@@ -181,7 +181,7 @@ volume = {322},
 pages = {114694},
 year = {2025},
 issn = {0034-4257},
-doi = {https://doi.org/10.1016/j.rse.2025.114694},  
+doi = {https://doi.org/10.1016/j.rse.2025.114694},   
 url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
 author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
 keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
