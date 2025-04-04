@@ -8,7 +8,7 @@ import streamlit as st
 import torch
 
 # Import custom modules
-from cloud_detection import predict_from_array
+from omnicloudmask import predict_from_array
 from visualization import plot_results
 
 def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor=2, device="cuda", detection_options=None):
