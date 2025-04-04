@@ -5,11 +5,69 @@ import re
 from datetime import datetime
 import time
 import shutil
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 
 # Import custom modules
 from file_utils import find_raster_files, is_multiband_file, group_files_by_date_tile
 from processing import process_multiband_file, process_single_band_files
+
+def process_group_wrapper(args):
+    """
+    Wrapper function for multiprocessing to handle a group of files
+    
+    Parameters:
+    args (tuple): (group_name, files, red_band_file, green_band_file, nir_band_file, output_dir, resampling_factor, device, detection_options)
+    
+    Returns:
+    tuple: (group_name, success)
+    """
+    group_name, files, red_band_file, green_band_file, nir_band_file, output_dir, resampling_factor, device, detection_options = args
+    
+    try:
+        # Create a dictionary of all files for this group
+        files_dict = {os.path.basename(f): f for f in files}
+        
+        # Process the files
+        success = process_single_band_files(
+            files_dict, 
+            red_band_file, 
+            green_band_file, 
+            nir_band_file, 
+            output_dir, 
+            resampling_factor, 
+            device, 
+            detection_options
+        )
+        
+        return (group_name, success)
+    except Exception as e:
+        print(f"Error processing group {group_name}: {str(e)}")
+        return (group_name, False)
+
+def process_multiband_wrapper(args):
+    """
+    Wrapper function for multiprocessing to handle a multiband file
+    
+    Parameters:
+    args (tuple): (file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor, device, detection_options)
+    
+    Returns:
+    tuple: (filename, success)
+    """
+    file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor, device, detection_options = args
+    
+    try:
+        filename = os.path.basename(file_path)
+        success = process_multiband_file(
+            file_path, red_band_idx, green_band_idx, nir_band_idx, 
+            output_dir, resampling_factor, device, detection_options
+        )
+        return (filename, success)
+    except Exception as e:
+        print(f"Error processing file {os.path.basename(file_path)}: {str(e)}")
+        return (os.path.basename(file_path), False)
 
 def main():
     st.set_page_config(layout="wide", page_title="Cloud Masking App")
@@ -17,25 +75,26 @@ def main():
     st.title("Satellite Image Cloud Masking Tool")
     
     st.markdown("""
-This application helps you mask clouds in satellite imagery. It uses the OmniCloudMask deep learning model to accurately identify clouds and cloud shadows in your images.
+    This application helps you mask clouds in satellite imagery. It uses the OmniCloudMask deep learning model to accurately identify clouds and cloud shadows in your images.
 
-### How to use:
+    ### How to use:
 
-1. **Choose a processing mode**:
-   - **Single File**: Upload a multiband GeoTIFF and specify which bands to use
-   - **Folder Processing**: Point to a folder with satellite imagery files
+    1. **Choose a processing mode**:
+    - **Single File**: Upload a multiband GeoTIFF and specify which bands to use
+    - **Folder Processing**: Point to a folder containing satellite image files. The files can be organised into multiple single-band or multi-band files (the band structure has to be consistent).
 
-2. **Configure options**:
-   - Set resampling factor for speed/accuracy balance (the resampled spat. res. should be >=10 m)
-   - Adjust advanced parameters if needed
-   - Specify output location
+    2. **Configure options**:
+    - Set resampling factor for speed/accuracy balance (the resampled spat. res. should be >=10 m)
+    - Set worker if you want to use the multicore processing option (only available for folder processing)            
+    - Adjust advanced parameters if needed (model parameter, cloud mask file save)
+    - Specify output location
 
-3. **Start processing**:
-   - The app will detect clouds and cloud shadows
-   - It will replace cloud pixels with NoData values
-   - Results are saved to your specified output folder
+    3. **Start processing**:
+    - The app will detect clouds and cloud shadows
+    - It will replace cloud pixels with NoData values
+    - Results are saved to your specified output folder
 
-The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR bands at 10-50m resolution. For more information look into the paper or Github.
+    The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR bands at 10-50m resolution. For more information look into the paper or Github.
     """)
 
     # Add information about OmniCloudMask
@@ -63,13 +122,14 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
         pages = {114694},
         year = {2025},
         issn = {0034-4257},
-        doi = {https://doi.org/10.1016/j.rse.2025.114694}, 
+        doi = {https://doi.org/10.1016/j.rse.2025.114694},  
         url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
         author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
         keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
         }
         ```
         """)
+    
     
     # Sidebar for inputs
     with st.sidebar:
@@ -95,6 +155,33 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
         
         st.write(f"Processing device: {'GPU (CUDA)' if has_cuda else 'CPU (GPU not available)'}")
         
+        # Add multicore processing option for folder processing
+        if processing_mode == "Folder Processing":
+            # Add multicore processing option
+            use_multicore = st.checkbox(
+                "Use Multicore Processing", 
+                value=True,
+                help="Enable multicore processing for faster batch processing. Only applicable when processing multiple files."
+            )
+            
+            if use_multicore:
+                # Detect number of CPU cores
+                max_cores = multiprocessing.cpu_count()
+                num_workers = st.slider(
+                    "Number of Worker Processes", 
+                    min_value=1, 
+                    max_value=max_cores, 
+                    value=min(4, max_cores),
+                    help=f"Number of parallel processes to use (your system has {max_cores} CPU cores available)"
+                )
+                
+                # Add a warning if user selects more cores than available
+                if num_workers > max_cores:
+                    st.warning(f"You've selected {num_workers} worker processes, but your system only has {max_cores} CPU cores. " +
+                            f"This may affect system performance and stability.")
+            else:
+                num_workers = 1  # Single process mode
+        
         # Advanced cloud detection options
         st.subheader("Cloud Detection Options")
         
@@ -103,33 +190,31 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
                                         help="Size of the patches for inference")
             
             patch_overlap = st.number_input("Patch Overlap", min_value=0, max_value=1000, value=300,
-                                        help="Overlap between patches for inference")
+                                           help="Overlap between patches for inference")
             
             inference_batch_size = st.number_input("Inference Batch Size", min_value=1, max_value=16, value=1,
-                                                help="Number of patches to process in a batch")
+                                                 help="Number of patches to process in a batch")
             
             inference_dtype = st.selectbox("Inference Data Type", 
-                                        options=["float32", "float16", "bfloat16"],
-                                        index=0,
-                                        help="Data type for inference")
-            
-            # Removed export_confidence and softmax_output options
+                                          options=["float32", "float16", "bfloat16"],
+                                          index=0,
+                                          help="Data type for inference")
             
             no_data_value = st.number_input("No Data Value", value=0,
-                                        help="Value within input scenes that specifies no data region")
+                                           help="Value within input scenes that specifies no data region")
             
             apply_no_data_mask = st.checkbox("Apply No Data Mask", value=True,
-                                        help="If checked, applies a no-data mask to the predictions")
+                                           help="If checked, applies a no-data mask to the predictions")
             
             model_source = st.selectbox("Model Download Source",
-                                    options=["google_drive", "hugging_face"],
-                                    index=0,
-                                    help="Source from which to download model weights")
+                                       options=["google_drive", "hugging_face"],
+                                       index=0,
+                                       help="Source from which to download model weights")
             
             # Option to save cloud mask file
             save_cloud_mask = st.checkbox("Save Cloud Mask File", value=True,
                                         help="If checked, saves the cloud mask as a separate GeoTIFF file")
-
+        
         # Create a dictionary of detection options to pass to processing functions
         detection_options = {
             "patch_size": patch_size,
@@ -138,7 +223,6 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
             "inference_device": device,
             "mosaic_device": None,  # Will use inference device
             "inference_dtype": inference_dtype,
-            # Removed export_confidence and softmax_output
             "no_data_value": no_data_value,
             "apply_no_data_mask": apply_no_data_mask,
             "model_download_source": model_source,
@@ -245,7 +329,7 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
             os.makedirs(output_dir, exist_ok=True)
             
             with st.spinner("Processing file..."):
-                success = process_multiband_file(temp_path, red_band_idx, green_band_idx, nir_band_idx, output_dir)
+                success = process_multiband_file(temp_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor, device, detection_options)
                 
                 if success:
                     st.success(f"Processing complete! Results saved to {output_dir}")
@@ -262,12 +346,43 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
                     with st.spinner(f"Processing {len(multiband_files)} multiband files..."):
                         progress_bar = st.progress(0)
                         
-                        for i, file_path in enumerate(multiband_files):
-                            st.write(f"Processing {os.path.basename(file_path)}...")
-                            success = process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor, device, detection_options)
-                            progress_bar.progress((i + 1) / len(multiband_files))
+                        # Collect processing args for each file
+                        processing_args = [
+                            (file_path, red_band_idx, green_band_idx, nir_band_idx, 
+                            output_dir, resampling_factor, device, detection_options)
+                            for file_path in multiband_files
+                        ]
                         
-                        st.success(f"Processing complete! Results saved to {output_dir}")
+                        # Process using multiple cores if enabled
+                        if use_multicore and num_workers > 1:
+                            successful = 0
+                            
+                            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                                # Process in parallel
+                                total = len(processing_args)
+                                
+                                for i, (filename, success) in enumerate(
+                                    executor.map(process_multiband_wrapper, processing_args)
+                                ):
+                                    if success:
+                                        successful += 1
+                                    progress_value = (i + 1) / total
+                                    progress_bar.progress(progress_value)
+                                    st.write(f"Processed file: {filename} - {'Success' if success else 'Failed'}")
+                        else:
+                            # Process sequentially
+                            successful = 0
+                            for i, file_path in enumerate(multiband_files):
+                                st.write(f"Processing {os.path.basename(file_path)}...")
+                                success = process_multiband_file(
+                                    file_path, red_band_idx, green_band_idx, nir_band_idx, 
+                                    output_dir, resampling_factor, device, detection_options
+                                )
+                                if success:
+                                    successful += 1
+                                progress_bar.progress((i + 1) / len(multiband_files))
+                        
+                        st.success(f"Processing complete! Successfully processed {successful}/{len(multiband_files)} files.")
                 
                 else:
                     # Process just the selected multiband file
@@ -286,9 +401,10 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
                     with st.spinner(f"Processing {len(grouped_files)} time periods..."):
                         progress_bar = st.progress(0)
                         
-                        for i, (group_name, files) in enumerate(grouped_files.items()):
-                            st.write(f"Processing time period: {group_name}...")
-                            
+                        # Collect processing args for each group
+                        processing_args = []
+                        
+                        for group_name, files in grouped_files.items():
                             # Need to ensure we have the right files for each group
                             red_band_file = files[0]  # Default to first file
                             green_band_file = files[0]  # Default to first file
@@ -303,13 +419,62 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
                                 elif "B08" in os.path.basename(file):
                                     nir_band_file = file
                             
-                            # Create a dictionary of all files for this group
-                            files_dict = {os.path.basename(f): f for f in files}
-                            
-                            process_single_band_files(files_dict, red_band_file, green_band_file, nir_band_file, output_dir, resampling_factor, device, detection_options)
-                            progress_bar.progress((i + 1) / len(grouped_files))
+                            # Add to processing args
+                            processing_args.append(
+                                (group_name, files, red_band_file, green_band_file, nir_band_file, 
+                                output_dir, resampling_factor, device, detection_options)
+                            )
                         
-                        st.success(f"Processing complete! Results saved to {output_dir}")
+                        # Process using multiple cores if enabled
+                        if use_multicore and num_workers > 1:
+                            successful = 0
+                            
+                            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                                # Process in parallel
+                                total = len(processing_args)
+                                
+                                for i, (group_name, success) in enumerate(
+                                    executor.map(process_group_wrapper, processing_args)
+                                ):
+                                    if success:
+                                        successful += 1
+                                    progress_value = (i + 1) / total
+                                    progress_bar.progress(progress_value)
+                                    st.write(f"Processed group: {group_name} - {'Success' if success else 'Failed'}")
+                        else:
+                            # Process sequentially
+                            successful = 0
+                            for i, (group_name, files) in enumerate(grouped_files.items()):
+                                st.write(f"Processing time period: {group_name}...")
+                                
+                                # Need to ensure we have the right files for each group
+                                red_band_file = files[0]  # Default to first file
+                                green_band_file = files[0]  # Default to first file
+                                nir_band_file = files[0]  # Default to first file
+                                
+                                # Try to infer based on filenames
+                                for file in files:
+                                    if "B04" in os.path.basename(file):
+                                        red_band_file = file
+                                    elif "B03" in os.path.basename(file):
+                                        green_band_file = file
+                                    elif "B08" in os.path.basename(file):
+                                        nir_band_file = file
+                                
+                                # Create a dictionary of all files for this group
+                                files_dict = {os.path.basename(f): f for f in files}
+                                
+                                success = process_single_band_files(
+                                    files_dict, red_band_file, green_band_file, nir_band_file, 
+                                    output_dir, resampling_factor, device, detection_options
+                                )
+                                
+                                if success:
+                                    successful += 1
+                                
+                                progress_bar.progress((i + 1) / len(grouped_files))
+                        
+                        st.success(f"Processing complete! Successfully processed {successful}/{len(grouped_files)} time periods.")
                 
                 else:
                     # Process just the selected group
