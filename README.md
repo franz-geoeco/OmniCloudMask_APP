@@ -1,6 +1,6 @@
 # Cloud Masking Application
 
-A Streamlit application for detecting and masking clouds in satellite imagery using OmniCloudMask.
+A Streamlit application for detecting and masking clouds in satellite imagery using [OmniCloudMask](https://github.com/DPIRD-DMA/OmniCloudMask).
 
 ![Cloud Masking App Interface](app_image.png)
 
@@ -18,9 +18,9 @@ OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments cloud
 ## Installation
 1. Clone this repository:
 ```bash
-conda create -n omnicloudmask python=3.9
+conda create -n uicloudmasker python=3.9
 
-conda activate omnicloudmask
+conda activate uicloudmasker
 ```
 
 2. Clone this repository:
@@ -45,11 +45,12 @@ The app will open in your default web browser, typically at http://localhost:850
 
 ## Features
 
-- Process single multiband GeoTIFF files or folders of single-band files
+- Process single multiband GeoTIFF files or folders of single-band or multi-band files
 - Automatic detection of file groups by date/tile
 - Customizable resampling for faster processing
 - GPU detection and utilization when available
 - Advanced cloud detection parameters
+- Multi-core processing
 - Visualization of results
 - Batch processing
 
@@ -211,7 +212,7 @@ volume = {322},
 pages = {114694},
 year = {2025},
 issn = {0034-4257},
-doi = {https://doi.org/10.1016/j.rse.2025.114694},     
+doi = {https://doi.org/10.1016/j.rse.2025.114694},      
 url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
 author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
 keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
