@@ -118,6 +118,36 @@ The application generates the following output files in the specified output dir
   - 3 = Cloud Shadow
 - **Visualization**: Optional PNG file showing the detection results
 
+## Multicore Processing
+
+The application supports multicore processing for batch operations, which can significantly speed up processing multiple files:
+
+### How It Works
+
+1. When you select **Folder Processing** mode, you'll see an option to **Use Multicore Processing**
+2. If enabled, you can select the number of worker processes (parallel jobs) to use
+3. The application will automatically distribute the workload across the specified number of CPU cores
+
+### Performance Benefits
+
+- **Linear Scaling**: Processing time typically decreases proportionally with more cores
+- **Resource Utilization**: Makes efficient use of available CPU and memory resources
+- **Progress Tracking**: The progress bar shows overall completion across all workers
+
+### When to Use
+
+- **Large Batch Jobs**: When processing many files or time periods
+- **Multicore Systems**: Most beneficial on computers with 4+ CPU cores
+- **Independent Files**: Each file/group is processed independently
+
+### Resource Considerations
+
+- **Memory Usage**: Each worker process requires its own memory allocation
+- **GPU Utilization**: If using GPU acceleration, it will be shared among worker processes
+- **System Load**: Using too many workers might slow down other applications
+
+For optimal performance, set the number of workers based on your system's capabilities. A good starting point is to use the number of physical CPU cores minus one (to leave resources for the operating system).
+
 ## Application Structure
 
 The application consists of multiple Python modules, each with a specific role:
@@ -181,7 +211,7 @@ volume = {322},
 pages = {114694},
 year = {2025},
 issn = {0034-4257},
-doi = {https://doi.org/10.1016/j.rse.2025.114694},   
+doi = {https://doi.org/10.1016/j.rse.2025.114694},     
 url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
 author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
 keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
