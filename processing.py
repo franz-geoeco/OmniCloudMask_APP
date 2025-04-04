@@ -5,9 +5,10 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.warp import reproject
 import streamlit as st
+import torch
 
 # Import custom modules
-from omnicloudmask import predict_from_array
+from cloud_detection import predict_from_array
 from visualization import plot_results
 
 def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor=2, device="cuda", detection_options=None):
@@ -119,9 +120,6 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                     'count': resampled_stack.shape[0]
                 })
                 
-                # Predict cloud mask
-                import torch  # Import torch to handle dtype conversion
-                
                 # Prepare detection options
                 if detection_options is None:
                     detection_options = {}
@@ -131,6 +129,16 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                 
                 # Create a copy of detection options to avoid modifying the original
                 predict_options = detection_options.copy() if detection_options else {}
+                
+                # Remove export_confidence and softmax_output if they exist
+                if "export_confidence" in predict_options:
+                    predict_options.pop("export_confidence")
+                if "softmax_output" in predict_options:
+                    predict_options.pop("softmax_output")
+                
+                # Force these values to ensure we always get a binary mask
+                predict_options["export_confidence"] = False
+                predict_options["softmax_output"] = False
                 
                 # Handle inference_dtype conversion from string to torch.dtype
                 if "inference_dtype" in predict_options and isinstance(predict_options["inference_dtype"], str):
@@ -349,34 +357,47 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
                 'count': resampled_stack.shape[0]
             })
             
-            # Predict cloud mask
-            import torch  # Import torch to handle dtype conversion
-            
             # Prepare detection options
             if detection_options is None:
                 detection_options = {}
             
+            # Extract application-specific options before passing to predict_from_array
+            save_cloud_mask = detection_options.pop("save_cloud_mask", True) if detection_options else True
+            
+            # Create a copy of detection options to avoid modifying the original
+            predict_options = detection_options.copy() if detection_options else {}
+            
+            # Remove export_confidence and softmax_output if they exist
+            if "export_confidence" in predict_options:
+                predict_options.pop("export_confidence")
+            if "softmax_output" in predict_options:
+                predict_options.pop("softmax_output")
+            
+            # Force these values to ensure we always get a binary mask
+            predict_options["export_confidence"] = False
+            predict_options["softmax_output"] = False
+            
             # Handle inference_dtype conversion from string to torch.dtype
-            if "inference_dtype" in detection_options and isinstance(detection_options["inference_dtype"], str):
-                dtype_str = detection_options["inference_dtype"]
+            if "inference_dtype" in predict_options and isinstance(predict_options["inference_dtype"], str):
+                dtype_str = predict_options["inference_dtype"]
                 if dtype_str == "float32":
-                    detection_options["inference_dtype"] = torch.float32
+                    predict_options["inference_dtype"] = torch.float32
                 elif dtype_str == "float16":
-                    detection_options["inference_dtype"] = torch.float16
+                    predict_options["inference_dtype"] = torch.float16
                 elif dtype_str == "bfloat16":
                     if hasattr(torch, "bfloat16"):
-                        detection_options["inference_dtype"] = torch.bfloat16
+                        predict_options["inference_dtype"] = torch.bfloat16
                     else:
                         st.warning("bfloat16 not supported in your PyTorch version, falling back to float16")
-                        detection_options["inference_dtype"] = torch.float16
+                        predict_options["inference_dtype"] = torch.float16
             
             # Set inference device
-            detection_options["inference_device"] = device
+            predict_options["inference_device"] = device
             
-            # Call predict_from_array with all options
+            # Call predict_from_array with valid options only
             pred_mask_res = predict_from_array(
                 trimmed_stack,
-                **detection_options
+                **predict_options
             )
             
             # Create a visualization
@@ -427,7 +448,7 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
                         dst.write(masked_band, 1)
             
             # Save cloud mask as separate file if option is enabled
-            if detection_options.get("save_cloud_mask", True):
+            if save_cloud_mask:
                 base_filename = os.path.basename(red_band_file)
                 pattern = r'(.*)_B\d+_(.*)\.tif'
                 match = re.search(pattern, base_filename, re.IGNORECASE)

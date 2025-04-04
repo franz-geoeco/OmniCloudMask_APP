@@ -103,37 +103,33 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
                                         help="Size of the patches for inference")
             
             patch_overlap = st.number_input("Patch Overlap", min_value=0, max_value=1000, value=300,
-                                           help="Overlap between patches for inference")
+                                        help="Overlap between patches for inference")
             
             inference_batch_size = st.number_input("Inference Batch Size", min_value=1, max_value=16, value=1,
-                                                 help="Number of patches to process in a batch")
+                                                help="Number of patches to process in a batch")
             
             inference_dtype = st.selectbox("Inference Data Type", 
-                                          options=["float32", "float16", "bfloat16"],
-                                          index=0,
-                                          help="Data type for inference")
+                                        options=["float32", "float16", "bfloat16"],
+                                        index=0,
+                                        help="Data type for inference")
             
-            export_confidence = st.checkbox("Export Confidence Maps", value=False,
-                                          help="If checked, exports confidence maps instead of predicted classes")
-            
-            softmax_output = st.checkbox("Apply Softmax", value=True,
-                                        help="If checked, applies a softmax to the output (only used with confidence maps)")
+            # Removed export_confidence and softmax_output options
             
             no_data_value = st.number_input("No Data Value", value=0,
-                                           help="Value within input scenes that specifies no data region")
+                                        help="Value within input scenes that specifies no data region")
             
             apply_no_data_mask = st.checkbox("Apply No Data Mask", value=True,
-                                           help="If checked, applies a no-data mask to the predictions")
+                                        help="If checked, applies a no-data mask to the predictions")
             
             model_source = st.selectbox("Model Download Source",
-                                       options=["google_drive", "hugging_face"],
-                                       index=0,
-                                       help="Source from which to download model weights")
+                                    options=["google_drive", "hugging_face"],
+                                    index=0,
+                                    help="Source from which to download model weights")
             
             # Option to save cloud mask file
-            save_cloud_mask = st.checkbox("Save Cloud Mask File", value=False,
+            save_cloud_mask = st.checkbox("Save Cloud Mask File", value=True,
                                         help="If checked, saves the cloud mask as a separate GeoTIFF file")
-        
+
         # Create a dictionary of detection options to pass to processing functions
         detection_options = {
             "patch_size": patch_size,
@@ -142,8 +138,7 @@ The app works with Sentinel-2, Landsat, and other satellite imagery with RGB+NIR
             "inference_device": device,
             "mosaic_device": None,  # Will use inference device
             "inference_dtype": inference_dtype,
-            "export_confidence": export_confidence,
-            "softmax_output": softmax_output,
+            # Removed export_confidence and softmax_output
             "no_data_value": no_data_value,
             "apply_no_data_mask": apply_no_data_mask,
             "model_download_source": model_source,

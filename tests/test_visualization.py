@@ -22,24 +22,6 @@ def test_plot_results_binary_mask():
     # Clean up
     plt.close(fig)
 
-def test_plot_results_confidence_map():
-    """Test plot_results with confidence maps"""
-    # Create test data
-    rgb_stack = np.random.rand(3, 10, 10)      # 3-band RGB stack
-    confidence_map = np.random.rand(4, 10, 10) # 4-class confidence map
-    
-    # Call the function
-    fig = plot_results(rgb_stack, confidence_map)
-    
-    # Check that a figure was returned
-    assert isinstance(fig, plt.Figure)
-    
-    # Check that the figure has the right number of axes
-    assert len(fig.axes) > 3  # Should have more axes for confidence maps
-    
-    # Clean up
-    plt.close(fig)
-
 def test_plot_results_with_3d_mask():
     """Test plot_results with a 3D mask that needs squeezing"""
     # Create test data
