@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from unittest.mock import patch, MagicMock, call
 
-@patch('cloud_detection.predict_from_array')
+@patch('omnicloudmask.predict_from_array')
 def test_binary_mask_enforced(mock_predict):
     """
     Test that export_confidence=False and softmax_output=False are enforced
@@ -47,7 +47,7 @@ def test_binary_mask_enforced(mock_predict):
     assert call_kwargs.get('batch_size') == 2  # Other options should be preserved
 
 # We need to mock at the module level
-@patch('cloud_detection.predict_from_array')
+@patch('omnicloudmask.predict_from_array')
 def test_save_cloud_mask_option(mock_predict):
     """Test that the save_cloud_mask option is extracted and not passed to predict_from_array"""
     # Setup the mock
@@ -120,7 +120,7 @@ def test_save_cloud_mask_option(mock_predict):
     assert 'save_cloud_mask' not in call_kwargs
     assert 'batch_size' in call_kwargs
 
-@patch('cloud_detection.predict_from_array')
+@patch('omnicloudmask.predict_from_array')
 def test_torch_dtype_conversion(mock_predict):
     """Test that string dtype values are converted to torch dtypes"""
     import torch
