@@ -6,7 +6,7 @@ A Streamlit application for detecting and masking clouds in satellite imagery us
 
 ## About OmniCloudMask
 
-OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments clouds and cloud shadows. It demonstrates robust state-of-the-art performance across various satellite platforms when classifying clear, cloud, and shadow classes, with balanced overall accuracy values across:
+OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments clouds and cloud shadows developed by [Nicholas Wright](https://github.com/wrignj08) and [Jordan A. Caraballo-Vega](https://github.com/jordancaraballo). It demonstrates robust state-of-the-art performance across various satellite platforms when classifying clear, cloud, and shadow classes, with balanced overall accuracy values across:
 - **Landsat**: 91.5% clear, 91.5% cloud, and 75.2% shadow
 - **Sentinel-2**: 92.2% clear, 91.2% cloud, and 80.5% shadow
 - **PlanetScope**: 96.9% clear, 98.8% cloud, and 97.4% shadow
