@@ -8,8 +8,9 @@ import streamlit as st
 import torch
 
 # Import custom modules
+# Import custom modules
 from omnicloudmask import predict_from_array
-from visualization import plot_results
+from visualization import plot_results, display_cloud_statistics
 
 def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx, output_dir, resampling_factor=2, device="cuda", detection_options=None):
     """
@@ -30,6 +31,11 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
     """
     st.write(f"Processing multiband file: {os.path.basename(file_path)}")
     
+    # Extract mask class options
+    mask_classes = detection_options.pop("mask_classes", {"thick_cloud": True, "thin_cloud": True, "cloud_shadow": True})
+    # Extract compression settings if provided
+    compression_settings = detection_options.pop("compression", {"type": "lzw", "level": None})
+
     try:
         with rasterio.open(file_path) as src:
             # Read the specified bands
@@ -40,7 +46,18 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
             # Get metadata
             metadata = src.meta
             original_transform = src.transform
-            original_compression = src.compression if hasattr(src, 'compression') else 'lzw'
+            
+            # IMPORTANT: Extract compression settings from source file
+            if hasattr(src, 'compression'):
+                original_compression = src.compression.value if src.compression else 'lzw'
+            else:
+                # Use provided compression settings or default to lzw
+                original_compression = compression_settings["type"] if compression_settings["type"] != "none" else 'lzw'
+            
+            # Set compression level if using a compression type that supports levels
+            compression_level = None
+            if original_compression in ['deflate', 'zstd'] and compression_settings.get("level"):
+                compression_level = compression_settings["level"]
             
             # Calculate new dimensions based on resampling factor
             if resampling_factor > 1:
@@ -167,7 +184,10 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                 rgb_for_plot = np.stack([trimmed_stack[2], trimmed_stack[0], trimmed_stack[1]], axis=0)  # NIR, Red, Green
                 fig = plot_results(rgb_for_plot, pred_mask_res[0])
                 st.pyplot(fig)
-                
+
+                # Display cloud statistics
+                display_cloud_statistics(pred_mask_res[0])
+
                 # Reconstruct full resolution mask
                 full_mask = np.full((resampled_metadata['height'], resampled_metadata['width']), -9999, dtype=np.float32)
                 full_mask[row_min:row_max, col_min:col_max] = pred_mask_res[0]
@@ -196,13 +216,36 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                     
                     # Apply cloud mask: set cloud pixels to NoData
                     masked_band = band_data.copy()
-                    cloud_pixels = (upsampled_mask >= 1) & validity_mask
-                    masked_band[cloud_pixels] = no_data_value
+                    # Create cloud pixels mask based on selected classes
+                    cloud_pixels_mask = np.zeros_like(validity_mask, dtype=bool)
+                    
+                    # Class 1: Thick Cloud
+                    if mask_classes.get("thick_cloud", True):
+                        cloud_pixels_mask |= (upsampled_mask == 1) & validity_mask
+                    
+                    # Class 2: Thin Cloud
+                    if mask_classes.get("thin_cloud", True):
+                        cloud_pixels_mask |= (upsampled_mask == 2) & validity_mask
+                    
+                    # Class 3: Cloud Shadow
+                    if mask_classes.get("cloud_shadow", True):
+                        cloud_pixels_mask |= (upsampled_mask == 3) & validity_mask
+                    
+                    # Apply the mask
+                    masked_band[cloud_pixels_mask] = no_data_value
                     
                     masked_data[i-1] = masked_band
                 
                 # Prepare output metadata
                 output_metadata = src.meta.copy()
+                
+                # IMPORTANT: Apply compression to output files
+                if original_compression:
+                    output_metadata.update({'compress': original_compression})
+                    
+                    # Add compression level if applicable
+                    if compression_level is not None and original_compression in ['deflate', 'zstd']:
+                        output_metadata.update({'compress_level': compression_level})
                 
                 # Save masked file
                 os.makedirs(output_dir, exist_ok=True)
@@ -223,6 +266,14 @@ def process_multiband_file(file_path, red_band_idx, green_band_idx, nir_band_idx
                         'dtype': 'uint8',
                         'nodata': 255
                     })
+                    
+                    # Apply compression to mask file too
+                    if original_compression:
+                        mask_metadata.update({'compress': original_compression})
+                        
+                        # Add compression level if applicable
+                        if compression_level is not None and original_compression in ['deflate', 'zstd']:
+                            mask_metadata.update({'compress_level': compression_level})
                     
                     binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
                     
@@ -262,13 +313,30 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
     """
     st.write(f"Processing single-band files")
     
+    # Extract mask class options
+    mask_classes = detection_options.pop("mask_classes", {"thick_cloud": True, "thin_cloud": True, "cloud_shadow": True})
+    # Extract compression settings if provided
+    compression_settings = detection_options.pop("compression", {"type": "lzw", "level": None})
+
     try:
         # Get metadata from red band file
         with rasterio.open(red_band_file) as red_src:
             red_band = red_src.read(1)
             metadata = red_src.meta
             original_transform = red_src.transform
-            original_compression = red_src.compression if hasattr(red_src, 'compression') else 'lzw'
+            
+            # IMPORTANT: Extract compression settings from source file
+            if hasattr(red_src, 'compression'):
+                original_compression = red_src.compression.value if red_src.compression else 'lzw'
+            else:
+                # Use provided compression settings or default to lzw
+                original_compression = compression_settings["type"] if compression_settings["type"] != "none" else 'lzw'
+            
+            # Set compression level if using a compression type that supports levels
+            compression_level = None
+            if original_compression in ['deflate', 'zstd'] and compression_settings.get("level"):
+                compression_level = compression_settings["level"]
+                
             no_data_value = red_src.nodata if red_src.nodata is not None else -9999
         
         with rasterio.open(green_band_file) as green_src:
@@ -404,6 +472,9 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
             rgb_for_plot = np.stack([trimmed_stack[2], trimmed_stack[0], trimmed_stack[1]], axis=0)  # NIR, Red, Green
             fig = plot_results(rgb_for_plot, pred_mask_res[0])
             st.pyplot(fig)
+
+            # Display cloud statistics
+            display_cloud_statistics(pred_mask_res[0])
             
             # Reconstruct full resolution mask
             full_mask = np.full((resampled_metadata['height'], resampled_metadata['width']), -9999, dtype=np.float32)
@@ -433,11 +504,35 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
                     
                     # Apply cloud mask: set cloud pixels to NoData
                     masked_band = band_data.copy()
-                    cloud_pixels = (upsampled_mask >= 1) & validity_mask
-                    masked_band[cloud_pixels] = no_data_value
+                    
+                    # Create cloud pixels mask based on selected classes
+                    cloud_pixels_mask = np.zeros_like(validity_mask, dtype=bool)
+                    
+                    # Class 1: Thick Cloud
+                    if mask_classes.get("thick_cloud", True):
+                        cloud_pixels_mask |= (upsampled_mask == 1) & validity_mask
+                    
+                    # Class 2: Thin Cloud
+                    if mask_classes.get("thin_cloud", True):
+                        cloud_pixels_mask |= (upsampled_mask == 2) & validity_mask
+                    
+                    # Class 3: Cloud Shadow
+                    if mask_classes.get("cloud_shadow", True):
+                        cloud_pixels_mask |= (upsampled_mask == 3) & validity_mask
+                    
+                    # Apply the mask
+                    masked_band[cloud_pixels_mask] = no_data_value
                     
                     # Prepare output metadata
                     output_metadata = src.meta.copy()
+                    
+                    # IMPORTANT: Apply compression to output files
+                    if original_compression:
+                        output_metadata.update({'compress': original_compression})
+                        
+                        # Add compression level if applicable
+                        if compression_level is not None and original_compression in ['deflate', 'zstd']:
+                            output_metadata.update({'compress_level': compression_level})
                     
                     # Save masked file
                     os.makedirs(output_dir, exist_ok=True)
@@ -467,6 +562,14 @@ def process_single_band_files(files_dict, red_band_file, green_band_file, nir_ba
                     'dtype': 'uint8',
                     'nodata': 255
                 })
+                
+                # IMPORTANT: Apply compression to mask file
+                if original_compression:
+                    mask_metadata.update({'compress': original_compression})
+                    
+                    # Add compression level if applicable
+                    if compression_level is not None and original_compression in ['deflate', 'zstd']:
+                        mask_metadata.update({'compress_level': compression_level})
                 
                 binary_mask = np.where(upsampled_mask == -9999, 255, upsampled_mask.astype(np.uint8))
                 

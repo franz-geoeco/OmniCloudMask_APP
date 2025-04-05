@@ -75,7 +75,7 @@ def main():
     st.title("Satellite Image Cloud Masking Tool")
     
     st.markdown("""
-    This application helps you mask clouds in satellite imagery. It uses the OmniCloudMask deep learning model to accurately identify clouds and cloud shadows in your images.
+    This application helps you mask clouds in satellite imagery. It uses the [OmniCloudMask](https://github.com/DPIRD-DMA/OmniCloudMask) deep learning model developed by [Nicholas Wright](https://github.com/wrignj08) and [Jordan A. Caraballo-Vega](https://github.com/jordancaraballo) to accurately identify and mask clouds and cloud shadows in your images.
 
     ### How to use:
 
@@ -122,7 +122,7 @@ def main():
         pages = {114694},
         year = {2025},
         issn = {0034-4257},
-        doi = {https://doi.org/10.1016/j.rse.2025.114694},  
+        doi = {https://doi.org/10.1016/j.rse.2025.114694}, 
         url = {https://www.sciencedirect.com/science/article/pii/S0034425725000987},
         author = {Nicholas Wright and John M.A. Duncan and J. Nik Callow and Sally E. Thompson and Richard J. George},
         keywords = {Sensor-agnostic, Deep learning, Cloud, Shadow, Sentinel-2, Landsat, PlanetScope}
@@ -210,11 +210,47 @@ def main():
                                        options=["google_drive", "hugging_face"],
                                        index=0,
                                        help="Source from which to download model weights")
-            
+
+            st.subheader("Cloud Masking Classes")
+            st.markdown("Select which cloud classes should be masked out:")
+
+            mask_thick_cloud = st.checkbox("Mask Thick Cloud (Class 1)", value=True, 
+                                        help="Mask out pixels classified as thick/opaque clouds")
+
+            mask_thin_cloud = st.checkbox("Mask Thin Cloud (Class 2)", value=True,
+                                        help="Mask out pixels classified as thin/semi-transparent clouds")
+
+            mask_cloud_shadow = st.checkbox("Mask Cloud Shadow (Class 3)", value=True,
+                                        help="Mask out pixels classified as cloud shadows")
+
             # Option to save cloud mask file
+            st.subheader("Save Masks as Files")
             save_cloud_mask = st.checkbox("Save Cloud Mask File", value=True,
                                         help="If checked, saves the cloud mask as a separate GeoTIFF file")
+            
+            st.subheader("File Output Settings")
+            compression_type = st.selectbox(
+                "Compression Type", 
+                options=["lzw", "deflate", "zstd", "packbits", "none"],
+                index=0,
+                help="Set compression type for output files. LZW offers good balance of speed and compression."
+            )
+            
+            # Only show compression level for compression types that support it
+            compression_level = None
+            if compression_type in ["deflate", "zstd"]:
+                compression_level = st.slider(
+                    "Compression Level", 
+                    min_value=1, 
+                    max_value=9, 
+                    value=5,
+                    help="Higher values = smaller files but slower processing"
+                )
+            
+
         
+
+
         # Create a dictionary of detection options to pass to processing functions
         detection_options = {
             "patch_size": patch_size,
@@ -227,6 +263,18 @@ def main():
             "apply_no_data_mask": apply_no_data_mask,
             "model_download_source": model_source,
             "save_cloud_mask": save_cloud_mask
+        }
+        
+        detection_options["mask_classes"] = {
+            "thick_cloud": mask_thick_cloud,
+            "thin_cloud": mask_thin_cloud, 
+            "cloud_shadow": mask_cloud_shadow
+        }
+        
+        # Add compression settings to detection_options
+        detection_options["compression"] = {
+            "type": compression_type,
+            "level": compression_level
         }
         
         if processing_mode == "Single File":
@@ -287,7 +335,7 @@ def main():
                     nir_band_idx = st.selectbox("NIR Band Index (1-based)", options=range(1, band_count+1), index=3 if band_count >= 4 else 0)
                     
                     # Process all multiband files or just selected
-                    process_all = st.checkbox("Process all multiband files in folder", value=False)
+                    process_all = st.checkbox("Process all multiband files in folder", value=True)
                     
                 else:
                     # Try to group single-band files
@@ -317,7 +365,7 @@ def main():
                             process_all = st.checkbox("Process all time periods in folder", value=False)
         
         # Output directory
-        output_dir = st.text_input("Output Directory", "masked_output")
+        output_dir = st.text_input("Output Directory", "masked_output", help = "Path where all files should be stored.")
         
         # Start processing button
         process_button = st.button("Start Processing")

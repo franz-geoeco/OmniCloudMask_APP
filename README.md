@@ -18,7 +18,7 @@ OmniCloudMask (OCM) is a sensor-agnostic deep learning model that segments cloud
 ## Installation
 1. Clone this repository:
 ```bash
-conda create -n uicloudmasker python=3.9
+conda create -n uicloudmasker python=3.10
 
 conda activate uicloudmasker
 ```

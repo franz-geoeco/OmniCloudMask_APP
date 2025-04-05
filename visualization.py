@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import streamlit as st
 
 def plot_results(rgb_stack, cloud_mask):
     """
@@ -55,3 +57,79 @@ def plot_results(rgb_stack, cloud_mask):
     plt.tight_layout()
     
     return fig
+
+def calculate_cloud_statistics(cloud_mask):
+    """
+    Calculate statistics about cloud coverage
+    
+    Parameters:
+    cloud_mask (np.array): Cloud mask array (height, width)
+    
+    Returns:
+    dict: Dictionary with cloud statistics
+    """
+    # Ensure mask is properly formed
+    if cloud_mask is None or cloud_mask.size == 0:
+        return {"error": "Invalid cloud mask"}
+    
+    # Get counts of each class (0=clear, 1=thick cloud, 2=thin cloud, 3=shadow)
+    total_pixels = cloud_mask.size
+    valid_pixels = np.sum(cloud_mask != 255)  # Exclude no-data pixels
+    
+    # Calculate percentages for each class
+    if valid_pixels > 0:
+        clear_pixels = np.sum(cloud_mask == 0)
+        thick_cloud_pixels = np.sum(cloud_mask == 1)
+        thin_cloud_pixels = np.sum(cloud_mask == 2)
+        shadow_pixels = np.sum(cloud_mask == 3)
+        
+        stats = {
+            "clear_percent": (clear_pixels / valid_pixels) * 100,
+            "thick_cloud_percent": (thick_cloud_pixels / valid_pixels) * 100,
+            "thin_cloud_percent": (thin_cloud_pixels / valid_pixels) * 100,
+            "shadow_percent": (shadow_pixels / valid_pixels) * 100,
+            "total_cloud_percent": ((thick_cloud_pixels + thin_cloud_pixels + shadow_pixels) / valid_pixels) * 100,
+            "valid_coverage_percent": (valid_pixels / total_pixels) * 100
+        }
+    else:
+        stats = {
+            "clear_percent": 0,
+            "thick_cloud_percent": 0,
+            "thin_cloud_percent": 0, 
+            "shadow_percent": 0,
+            "total_cloud_percent": 0,
+            "valid_coverage_percent": 0
+        }
+    
+    return stats
+
+def display_cloud_statistics(cloud_mask):
+    """
+    Display cloud statistics in the Streamlit interface
+    
+    Parameters:
+    cloud_mask (np.array): Cloud mask array
+    """
+    stats = calculate_cloud_statistics(cloud_mask)
+    
+    if "error" in stats:
+        st.error(stats["error"])
+        return
+    
+    st.subheader("Cloud Coverage Statistics")
+    
+    # Create columns for statistics
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("Clear Sky", f"{stats['clear_percent']:.2f}%")
+        st.metric("Thick Clouds", f"{stats['thick_cloud_percent']:.2f}%")
+    
+    with col2:
+        st.metric("Thin Clouds", f"{stats['thin_cloud_percent']:.2f}%")
+        st.metric("Cloud Shadows", f"{stats['shadow_percent']:.2f}%")
+    
+    # Display total cloud coverage with a progress bar
+    st.subheader("Total Cloud Coverage")
+    st.progress(min(stats['total_cloud_percent'] / 100, 1.0))
+    st.caption(f"{stats['total_cloud_percent']:.2f}% of image covered by clouds/shadows")
