@@ -39,7 +39,7 @@ conda activate satprocessing
 
 2. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/satellite-processing-suite.git
+git clone https://github.com/geoeco-mlu/OmniCloudMask_APP.git
 cd satellite-processing-suite
 ```
 
