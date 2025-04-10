@@ -2,7 +2,7 @@
 
 A Streamlit application for processing satellite imagery with two main components:
 1. **Cloud Masking Tool**: Detect and mask clouds using [OmniCloudMask](https://github.com/DPIRD-DMA/OmniCloudMask)
-2. **Mosaic Builder**: Create and regularize mosaics from Sentinel-2 imagery
+2. **Mosaic Builder**: Create and regularize mosaics from Sentinel-2 imagery with the same advanced cloud masking.
 
 ![Application Interface](app_image.png)
 
