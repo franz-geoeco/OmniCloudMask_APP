@@ -1,4 +1,6 @@
+
 omnicloudmask==1.0.10
 streamlit==1.44.1
-
-
+s2mosaic
+streamlit-folium
+folium
